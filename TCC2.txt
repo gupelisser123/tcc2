@@ -1,0 +1,163 @@
+// Necessário alterar alguns parâmetros para se adequar ao seu problema, como por exemplo "NomeDaRedeWiFi", "NomeDoBancoDeDados".
+
+#include <WiFi.h>          
+#include <MySQL_Connection.h>
+#include <MySQL_Cursor.h>
+                                                                                  
+IPAddress server_addr(IpDoSeUServidorSeparadoPorVirgulas);
+char user[] = "SeuUsuarioMySQL";
+char password[] = "SenhaUsuarioMySQL";
+char ssid[] = "NomeDaRedeWiFi";
+char pass[] = "SenhaDaRedeWifi";     //            Senha Wi-Fi
+char INSERT_DATA[] = "INSERT INTO NomeDoBancoDeDados.NomeDaTabela (NomeDaColuna) VALUES (%d);"; 
+char html[] = 
+  "<html>"
+    "<head>"
+      "<meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'/>"
+      "<title>ESP32</title>"
+      "<style>"
+        "body{"
+          "text-align: center;"
+          "font-family: sans-serif;"
+          "font-size:14px;"
+          "padding: 25px;"
+        "}"
+
+        "p{"
+          "color:#444;"
+        "}"
+
+        "button{"
+          "outline: none;"
+          "border: 2px solid #1fa3ec;"
+          "border-radius:18px;"
+          "background-color:#FFF;"
+          "color: #1fa3ec;"
+          "padding: 10px 50px;"
+        "}"
+
+        "button:active{"
+          "color: #fff;"
+          "background-color:#1fa3ec;"
+        "}"
+      "</style>"
+    "</head>"
+    "<body>"
+    "<p>Equipamento teste 123</p>"
+    "<p><a href='?acao=gpio0On'><button>ON</button></a></p>"
+    "<p><a href='?acao=gpio0Off'><button>OFF</button></a></p>"
+    "<p>Valor = ( %s ) </p>"
+    "</body>"
+  "</html>";
+
+char query[128];
+char query2[] = "SELECT AVG(Valores) FROM NomeDoBancoDeDados.NomeTabela";
+char dados[10];
+
+float head_count = 0;
+float head_count2 = 0;
+WiFiClient client;             
+MySQL_Connection conn(&client);
+MySQL_Cursor* cursor;                                                                            
+WiFiServer server(80);
+int cont = 0;
+int cont2 = 0;
+void setup() {
+  pinMode(15, OUTPUT);
+  Serial.begin(115200);
+  Serial.print("Conectando");
+  WiFi.begin(ssid,pass);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(100);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("Conectou ao WiFi");
+  server.begin();
+  Serial.print("Server iniciado, acesso em: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  row_values *row = NULL;
+  cont = cont +1;
+  //cont2 = cont2 +1;
+  Serial.println("Valor de cont: ");
+  Serial.println(cont);
+
+        if(cont==20){
+  Serial.println("Contador = 60 - Acesso ao banco de dados");
+  int id=10;
+  delay(100);
+
+  if (conn.connect(server_addr, 3306, user, password)) {
+      Serial.println("Conectado ao banco de dados");
+      delay(1000);
+      MySQL_Cursor *cur_mem = new MySQL_Cursor(&conn);
+      MySQL_Cursor *cur_mem2 = new MySQL_Cursor(&conn);
+
+  if(cont2!=3){
+  dtostrf(id, 2, 2, dados);
+  sprintf(query, INSERT_DATA, id);
+   cur_mem->execute(query);
+  delete cur_mem;
+  Serial.println("Dado registrado no banco de dados");
+  cont2 = cont2 +1;
+  Serial.println("Valor de cont 2 = ");
+  Serial.println(cont2);
+  }
+  ///////////////////////////////////////////////////////
+   if(cont2==3){
+    cur_mem2->execute(query2);    
+    column_names *columns = cur_mem2->get_columns();
+    row = cur_mem2->get_next_row();
+    if (row != NULL) {
+      head_count = atol(row->values[0]);
+    }
+  Serial.print(" Media dos valores = ");
+  Serial.println(head_count);
+
+    delay(500);
+    delete cur_mem2;
+   Serial.println("Consulta realizada"); //
+   cont2=0;
+   }
+
+  }
+  else
+    Serial.println(); Serial.println("Conexao finalizada."); //
+  conn.close();
+  Serial.println();
+  cont = 0;
+  }
+
+  delay(1000);
+  WiFiClient client = server.available();
+  char html2 [1200];
+  char media[10];
+  dtostrf(head_count, 3, 3, media);
+  sprintf(html2, html, media);
+  if (!client)
+  {
+    return;
+  }
+  Serial.println("Novo cliente conectou");
+  String req = client.readStringUntil('\r');
+  Serial.print("Requisicao: ");
+  Serial.println(req);
+
+  client.print(html2);
+  client.flush();
+
+  if (req.indexOf("acao=gpio0On") != -1)
+  {
+      digitalWrite(15, LOW);
+  }
+  else if (req.indexOf("acao=gpio0Off") != -1)
+  {
+    digitalWrite(15, HIGH);
+  }
+
+}
+
